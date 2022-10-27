@@ -1,0 +1,5 @@
+name = "VWO"
+description = Adds VWO javascript Smart Code to all your site's pages.
+package = Statistics
+configure = admin/config/system/vwo
+core = "7.x"

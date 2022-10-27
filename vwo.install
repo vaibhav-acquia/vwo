@@ -1,0 +1,150 @@
+<?php
+
+/**
+ * @file
+ * Install, requirements and uninstall functions for the Drupal VWO module.
+ */
+
+/**
+ * Implements hook_requirements().
+ */
+function vwo_requirements($phase) {
+
+  $requirements = array();
+  $t = get_t();
+
+  if ($phase == 'install') {
+    // We have no install time requirements as the only requirement is the
+    // setting of the VWO Account ID which can only be set after install.
+  }
+
+  elseif ($phase == 'runtime') {
+    // Check that the account ID has been set.
+    require_once dirname(__FILE__) . '/vwo.module';
+    $settings = array_merge(
+      _vwo_settings_defaults(),
+      variable_get('vwo_settings', array())
+    );
+
+    // Warn users using php_eval but without the PHP module enabled.
+    if ($settings['pagefilter'] == 'usephp' && !module_exists('php')) {
+      $requirements['vwo_php'] = array(
+        'title' => $t('VWO PHP Eval'),
+        'description' => $t('VWO page filters are configured to use php_eval, but the php module is not enabled. VWO module now depends on php module and permission to provide this functionality.'),
+        'severity' => REQUIREMENT_ERROR,
+        'value' => $t('In use, but disabled'),
+        'weight' => -5,
+      );
+    }
+
+    if ($settings['id'] == 'NONE') {
+      // Requirements failed - module will not run.
+      $requirements['vwo'] = array(
+        'title' => $t('VWO'),
+        'description' => $t('The VWO Account ID has not yet been configured.'),
+        'value' => $t('<a href="@url">Set VWO Account ID</a>',
+          array('@url' => url('admin/config/system/vwo'))),
+        'severity' => REQUIREMENT_ERROR,
+        'weight' => -5,
+      );
+    }
+    elseif ($settings['enabled'] == 'off') {
+      // Acc ID is set but module is turned off.
+      $requirements['vwo'] = array(
+        'title' => $t('VWO'),
+        'description' => $t('VWO filter processing is configured to be Disabled. To Enable visit <a href="@url">the settings page</a>.',
+          array('@url' => url('admin/config/system/vwo'))),
+        'value' => $t('VWO Account ID is @aid', array('@aid' => $settings['id'])),
+        'severity' => REQUIREMENT_WARNING,
+      );
+    }
+    else {
+      // Requirements satisfied.
+      $requirements['vwo'] = array(
+        'title' => $t('VWO'),
+        'value' => $t('VWO Account ID is @aid', array('@aid' => $settings['id'])),
+        'severity' => REQUIREMENT_OK,
+      );
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function vwo_enable() {
+
+  require_once dirname(__FILE__) . '/vwo.module';
+  $settings = array_merge(
+    _vwo_settings_defaults(),
+    variable_get('vwo_settings', array())
+  );
+
+  if ($settings['id'] == 'NONE') {
+    drupal_set_message(t('VWO plugin has been installed successfully. There\'s one more step: configure your VWO plugin on <a href="@url">the settings page</a>.', array('@url' => url('admin/config/system/vwo'))));
+  }
+  else {
+    drupal_set_message(t('VWO plugin has been enabled. Account ID is currently set to @aid. To change goto <a href="@url">the settings page</a>.',
+    [
+      '@aid' => $settings['id'],
+      '@url' => url('admin/config/system/vwo'),
+    ]));
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function vwo_uninstall() {
+  variable_del('vwo_settings');
+}
+
+/**
+ * Update variable storage to new single varaible setup, and clean up old ones.
+ */
+function vwo_update_7101() {
+  // Grab the new default settings.
+  require_once dirname(__FILE__) . '/vwo.module';
+  $settings = _vwo_settings_defaults();
+
+  // Add the existing setting.
+  $settings['id'] = variable_get('vwo_id', 'NONE');
+  $settings['enabled'] = variable_get('vwo_onoff', 'on');
+
+  // Re-save the settings in the new format.
+  variable_set('vwo_settings', $settings);
+
+  // Remove old variables if they existed.
+  variable_del('vwo_id');
+  variable_del('vwo_onoff');
+  variable_del('vwo_paths');
+
+  $t = get_t();
+  return $t('Retrieved current settings and saved in new one variable format. Removed old variables.');
+}
+
+/**
+ * Update default settings to include custom_url.
+ */
+function vwo_update_7102() {
+
+  // Load existing settings.
+  $settings = variable_get('vwo_settings', array());
+
+  // Add new settings.
+  $settings['custom_url'] = FALSE;
+
+  // Save changes.
+  variable_set('vwo_settings', $settings);
+
+  $t = get_t();
+
+  // Warn users about change to PHP requirements.
+  if ($settings['pagefilter'] == 'usephp' && !module_exists('php')) {
+    drupal_set_message($t('This module now needs the <em>php</em> module enabled and appropriate permission set to continue to use the PHP page filter setting.'), 'warning');
+  }
+
+  return $t('VWO Settings updated.');
+}

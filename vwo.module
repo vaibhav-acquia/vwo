@@ -1,0 +1,358 @@
+<?php
+
+/**
+ * @file
+ * VWO module.
+ *
+ * Originally by Awesome Software, http://www.awesome-software.net/
+ * Modified by Ted Cooper (ELC) http://drupal.org/user/784944
+ *
+ * Adds a small amount of javascript to the page which loads the A/B test from
+ * the the vwo.com website. All configuration after setting
+ * the Account ID happens on the VWO website.
+ */
+
+/**
+ * Implements hook_init().
+ */
+function vwo_init() {
+
+  // Special static cache shared between this and add_js function.
+  $state = &drupal_static('vwo_add_js_state');
+
+  if (!isset($state['settings'])) {
+    $state['added'] = FALSE;
+    $state['settings'] = array_merge(
+      _vwo_settings_defaults(),
+      variable_get('vwo_settings', array())
+    );
+  }
+  $settings = $state['settings'];
+
+  // If the code is not set, or the module is not enabled, do not check
+  // filters. If code has already been added, don't check again.
+  if ($state['added'] || $settings['id'] == 'NONE' || $settings['enabled'] == 'off') {
+    return;
+  }
+
+  // Check user setting filters - does not apply to anon user.
+  global $user;
+  if ($user->uid && $settings['userfilter'] != 'nocontrol') {
+
+    // Start with the default, and adjust based on user configuration settings
+    // are stored in $user->data.
+    $vwo_checkbox = FALSE;
+    if ($settings['userfilter'] == 'optin') {
+      $vwo_checkbox = FALSE;
+    }
+    elseif ($settings['userfilter'] == 'optout') {
+      $vwo_checkbox = TRUE;
+    }
+
+    // User settings override.
+    $user_data = @unserialize($user->data);
+    if (isset($user_data['vwo_userfilter'])) {
+      $vwo_checkbox = $user_data['vwo_userfilter'];
+    }
+
+    if (!$vwo_checkbox) {
+      return;
+    }
+  }
+
+  // Role specific, with negation.
+  if ($settings['rolefilter']) {
+    $intersect = array_intersect($settings['rolefilter'], array_keys($user->roles));
+    if ($settings['rolefilter_neg'] == 'normal') {
+      if (!$intersect) {
+        return;
+      }
+    }
+    elseif ($intersect) {
+      return;
+    }
+  }
+
+  // Page specific.
+  if ($settings['pagefilter'] && $settings['pagelist'] && isset($_GET['q'])) {
+    // Eval the PHP code and return if it returns FALSE.
+    if ($settings['pagefilter'] == 'usephp' && module_exists('php')) {
+      // Eval the PHP code and return if it returns FALSE.
+      if (!php_eval($settings['pagelist'])) {
+        return;
+      }
+    }
+    // The remaining modes need to also match against the alias path as well
+    // as the Drupal path.
+    else {
+      // Match against the raw path first.
+      $matched = drupal_match_path($_GET['q'], $settings['pagelist']);
+
+      // If we have already matched, there is no need to also check against
+      // the alias path too.
+      if (!$matched) {
+        // Get the alias and convert to lowercase.
+        $path = drupal_strtolower(drupal_get_path_alias($_GET['q']));
+
+        // Only check if the path is actually an alias.
+        if ($path != $_GET['q']) {
+          $matched = drupal_match_path($path, $settings['pagelist']);
+        }
+      }
+
+      // If the page does match any of the listed ones, return.
+      if ($settings['pagefilter'] == 'listexclude' && $matched) {
+        return;
+      }
+      // If the page doesn't match any of the listed ones, return.
+      elseif ($settings['pagefilter'] == 'listinclude' && !$matched) {
+        return;
+      }
+    }
+  }
+
+  // Negation of adding code has not occurred, so add it.
+  vwo_add_js($settings['custom_url']);
+}
+
+/**
+ * Add js snippet to header, provided it hasn't been done already.
+ *
+ * @param bool $custom_url
+ *   The Custom URL to include in the js for non-path based matching.
+ *
+ * @return bool
+ *   TRUE if the js is added during this execution; otherwise FALSE.
+ */
+function vwo_add_js($custom_url = FALSE) {
+  $state = &drupal_static(__FUNCTION__ . '_state');
+
+  // If $custom_url is set, it MUST be a valid fully qualified URI.
+  if ($custom_url && !valid_url($custom_url, TRUE)) {
+    return FALSE;
+  }
+
+  if (!isset($state['settings'])) {
+    $state['added'] = FALSE;
+    $state['settings'] = array_merge(
+      _vwo_settings_defaults(),
+      variable_get('vwo_settings', array())
+    );
+  }
+  $settings = $state['settings'];
+
+  // If js already added, don't add it again.
+  if ($state['added']) {
+    return FALSE;
+  }
+
+  // Synchronous code - 3 chunks of javascript to include.
+  if ($settings['synchtype'] == 'sync') {
+    $state['added'] = TRUE;
+    $src = sprintf("https://dev.visualwebsiteoptimizer.com/lib/%d.js", $settings['id']);
+    $data1 = array(
+      '#tag' => 'script',
+      '#value' => '',
+      '#attributes' => array(
+        "data-cfasync" => "false",
+        "id" => "vwoCode",
+        "src" => $src,
+      ),
+    );
+    drupal_add_html_head($data1, 'cflare');
+
+  }
+
+  // Asynchronous code - one large blob of code.
+  elseif ($settings['synchtype'] == 'async') {
+    $state['added'] = TRUE;
+
+    $value = sprintf("window._vwo_code=window._vwo_code || (function() {
+    var account_id=%d,
+    version=1.3,
+    settings_tolerance=%d,
+    library_tolerance=%d,
+    use_existing_jquery=%s,
+    is_spa=1,
+    hide_element='body',
+    f=false,d=document,code={use_existing_jquery:function(){return use_existing_jquery},library_tolerance:function(){return library_tolerance},finish:function(){if(!f){f=true;var e=d.getElementById('_vis_opt_path_hides');if(e)e.parentNode.removeChild(e)}},finished:function(){return f},load:function(e){var t=d.createElement('script');t.fetchPriority='high';t.src=e;t.type='text/javascript';t.innerText;t.onerror=function(){_vwo_code.finish()};d.getElementsByTagName('head')[0].appendChild(t)},init:function(){window.settings_timer=setTimeout(function(){_vwo_code.finish()},settings_tolerance);var e=d.createElement('style'),t=hide_element?hide_element+'{opacity:0 !important;filter:alpha(opacity=0) !important;background:none !important;}':'',i=d.getElementsByTagName('head')[0];e.setAttribute('id','_vis_opt_path_hides');e.setAttribute('nonce',document.querySelector('#vwoCode').nonce);e.setAttribute('type','text/css');if(e.styleSheet)e.styleSheet.cssText=t;else e.appendChild(d.createTextNode(t));i.appendChild(e);this.load('https://dev.visualwebsiteoptimizer.com/j.php?a='+account_id+'&u='+encodeURIComponent(d.URL)+'&f='+ +is_spa+'&vn='+version);return settings_timer}};window._vwo_settings_timer = code.init();return code;}());",
+            $settings['id'],
+            $settings['asynctolsettings'],
+            $settings['asynctollibrary'],
+            $settings['asyncusejquery'] == 'local' ? 'true' : 'false',
+    );
+
+    $data = array(
+      '#tag' => 'script',
+      '#value' => $value,
+      '#attributes' => array(
+        "data-cfasync" => "false",
+        "id" => "vwoCode",
+      ),
+    );
+    drupal_add_html_head($data, 'cflare');
+
+  }
+
+  return $state['added'];
+}
+
+/**
+ * Implements hook_help().
+ */
+function vwo_help($path, $arg) {
+  // Real content is in vwo.help.inc.
+  // Do path calculation here to avoid including help.inc on nearly every page
+  // render.
+  if ($path == 'admin/config/system/vwo'
+      || $path == 'admin/config/system/vwo/settings') {
+
+    module_load_include('inc', 'vwo', 'vwo.help');
+    return _vwo_help_settings();
+  }
+  elseif ($path == 'admin/config/system/vwo/filter') {
+    module_load_include('inc', 'vwo', 'vwo.help');
+    return _vwo_help_filter();
+  }
+  elseif ($path == 'admin/config/system/vwo/vwoid') {
+    module_load_include('inc', 'vwo', 'vwo.help');
+    return _vwo_help_vwoid();
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function vwo_permission() {
+  return array(
+    'administer vwo' => array(
+      'title' => t('Administer VWO'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function vwo_menu() {
+
+  $items['admin/config/system/vwo'] = array(
+    'title' => 'VWO Setup',
+    'description' => 'Configure your VWO account ID, and turn the module on/off.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('vwo_settings'),
+    'access arguments' => array('administer vwo'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'vwo.admin.inc',
+  );
+
+  $items['admin/config/system/vwo/settings'] = array(
+    'title' => 'Settings',
+    'access arguments' => array('administer vwo'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'file' => 'vwo.admin.inc',
+    'weight' => 0,
+  );
+
+  $items['admin/config/system/vwo/filter'] = array(
+    'title' => 'Filter',
+    'description' => 'Set filters which govern when the javascript code will be added to a page',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('vwo_filters'),
+    'access arguments' => array('administer vwo'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'vwo.admin.inc',
+    'weight' => 5,
+  );
+
+  $items['admin/config/system/vwo/vwoid'] = array(
+    'title' => 'Extract Account ID',
+    'description' => 'Set Account ID by extracting it from pasted code.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('vwo_parse_account_id'),
+    'access arguments' => array('administer vwo'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'vwo.admin.inc',
+    'weight' => 10,
+  );
+
+  return $items;
+}
+
+/**
+ * Returns default settings array for when there are no settings in module yet.
+ */
+function _vwo_settings_defaults() {
+  return array(
+    'id' => 'NONE',
+    'enabled' => 'on',
+    'userfilter' => 'nocontrol',
+    'rolefilter' => array(),
+    'rolefilter_neg' => 'normal',
+    'pagefilter' => 'listexclude',
+    'pagelist' => '',
+    'synchtype' => 'async',
+    'asyncusejquery' => 'import',
+    'asynctolsettings' => 2000,
+    'asynctollibrary' => 2500,
+    'custom_url' => FALSE,
+  );
+}
+
+/**
+ * Implements hook_form_user_profile_form_alter().
+ */
+function vwo_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+
+  $settings = array_merge(
+    _vwo_settings_defaults(),
+    variable_get('vwo_settings', array())
+  );
+
+  // If there is no user control, or the module is not working/enabled
+  // then do not show the options.
+  if ($settings['userfilter'] == 'nocontrol'
+      || $settings['enabled'] == 'off'
+      || $settings['id'] == 'NONE') {
+    return;
+  }
+
+  // Determine checkbox; default setting based on visibility setting.
+  $vwo_checkbox = FALSE;
+  if ($settings['userfilter'] == 'optin') {
+    $vwo_checkbox = FALSE;
+  }
+  elseif ($settings['userfilter'] == 'optout') {
+    $vwo_checkbox = TRUE;
+  }
+
+  // User settings override.
+  $account = $form['#user'];
+  if (isset($account->data['vwo_userfilter'])) {
+    $vwo_checkbox = $account->data['vwo_userfilter'];
+  }
+
+  $form['vwo_userfilter'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('VWO'),
+
+    'vwo_userfilter' => array(
+      '#type' => 'checkbox',
+      '#title' => t('Include VWO A/B testing'),
+      '#description' => t('This website may run A/B testing at times. If this box is checked, the javascript required for it to work will be included.'),
+      '#default_value' => $vwo_checkbox,
+    ),
+  );
+}
+
+/**
+ * Implements hook_user_presave().
+ */
+function vwo_user_presave(&$edit, $account, $category) {
+
+  // Add our data to the existing data array, or create it as an array if it's
+  // missing.
+  if (isset($edit['vwo_userfilter'])) {
+    $edit['data']['vwo_userfilter'] = $edit['vwo_userfilter'];
+  }
+}
