@@ -14,7 +14,7 @@ free trial account.
 
 Here are the implementation steps for VWO <> Drupal:
 
-## A. Install from .zip file -
+## Install -
 
 1. Download VWO plugin from here
 2. Login to Drupal’s admin panel and navigate to the Modules section.
@@ -23,15 +23,6 @@ Here are the implementation steps for VWO <> Drupal:
 5. Once the plugin is installed, you will see the successful installation 
    message. On this page, click Enable newly added modules.
 6. Select the checkbox next to the VWO module and then click Save configuration.
-
-## B. Install using Composer (only in Drupal 8.9 and above) -
-
-1. Run this command on your server ->
-`composer require 'drupal/visual_website_optimizer:^1.1'`
-2. Once the plugin is installed, you will see the successful installation 
-   message. On this page, click Enable newly added modules.
-3. Select the checkbox next to the VWO module and then click Save configuration.
-
 
 
 # Configuration steps -
