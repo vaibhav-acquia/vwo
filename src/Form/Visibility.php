@@ -138,8 +138,7 @@ class Visibility extends ConfigFormBase {
 
     // Convert the configuration value into a default_value.
     $nodes_config = $config->get('filter.nodetypes');
-    $nodes_default_value = array_combine($nodes_config, $nodes_config);
-
+    $nodes_default_value = (is_array($nodes_config)) ? array_combine($nodes_config, $nodes_config) : [$nodes_config];
     $form['nodefilter']['nodechecks'] = [
       '#type' => 'checkboxes',
       '#title' => $this->t('Include on Content Types'),
@@ -229,8 +228,7 @@ class Visibility extends ConfigFormBase {
 
     // Convert the configuration value into a default_value.
     $roles_config = $config->get('filter.roles');
-    $roles_default_value = array_combine($roles_config, $roles_config);
-
+    $roles_default_value = (is_array($roles_config)) ? array_combine($roles_config, $roles_config) : [$roles_config];
     $form['rolefitler']['rolechecks'] = [
       '#type' => 'checkboxes',
       '#title' => $this->t('Roles'),
