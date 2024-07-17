@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Tests\acquia_vwo\Functional;
+namespace Drupal\Tests\vwo\Functional;
 
 use Drupal\user\Entity\User;
 
@@ -27,7 +27,7 @@ class VwoIntegrationTest extends VwoTestBase {
   ];
 
   /**
-   * Acquia VWO settings.
+   * VWO settings.
    *
    * @var \Drupal\Core\Config\ImmutableConfig
    */
@@ -47,19 +47,7 @@ class VwoIntegrationTest extends VwoTestBase {
    * Test integration on multi-language site.
    */
   public function testMultiLanguage() {
-    // Configure VWO module and Acquia VWO module.
-  }
-
-  /**
-   * Test Cache tags and cache contexts.
-   */
-  public function testCaching() {
-    // Visit the node page.
-    // Check that integrations is present.
-    // Alter the configuration.
-    // Revisit the page
-    // Cache tags config:acquia_vwo.settings config:vwo.settings
-    // should only be added when VWO script is on.
+    // Configure VWO module and VWO module.
   }
 
   /**
