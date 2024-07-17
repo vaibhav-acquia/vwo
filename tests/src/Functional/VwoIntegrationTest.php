@@ -69,7 +69,6 @@ class VwoIntegrationTest extends VwoTestBase {
     // Perform login.
     $this->drupalLogin($this->authUser);
     // Check cache contexts.
-    // @todo This seems wrong, the module should set to user.roles:authenticated + user.permissions
     $this->assertCacheContext('user');
     // Check cache tags.
     $this->assertNoCacheTag('config:vwo.settings');
