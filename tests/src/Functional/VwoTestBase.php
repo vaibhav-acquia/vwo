@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Tests\acquia_vwo\Functional;
+namespace Drupal\Tests\vwo\Functional;
 
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Tests\BrowserTestBase;
@@ -24,14 +24,14 @@ class VwoTestBase extends BrowserTestBase {
   ];
 
   /**
-   * A user without the "Administer Acquia VWO" permission.
+   * A user without the "Administer VWO" permission.
    *
    * @var \Drupal\Core\Session\AccountInterface
    */
   protected $authUser;
 
   /**
-   * A user with the "Administer Acquia VWO" permission.
+   * A user with the "Administer VWO" permission.
    *
    * @var \Drupal\Core\Session\AccountInterface
    */
