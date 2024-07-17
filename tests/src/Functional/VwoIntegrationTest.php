@@ -4,7 +4,9 @@ namespace Drupal\Tests\vwo\Functional;
 
 use Drupal\user\Entity\User;
 
-// cspell:ignore userconfig nocontrol nodetypes listexclude listinclude optout Pathconfig Userconfig Visualisation
+// cspell:ignore userconfig nocontrol nodetypes
+// cspell:ignore listexclude listinclude optout
+// cspell:ignore Pathconfig Userconfig Visualisation
 /**
  * VWO Integration Tests.
  *
