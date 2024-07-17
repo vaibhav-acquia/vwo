@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Tests\acquia_vwo\Functional;
+namespace Drupal\Tests\vwo\Functional;
 
 /**
  * Tests VWO admin settings.
