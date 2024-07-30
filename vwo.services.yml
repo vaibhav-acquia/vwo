@@ -1,0 +1,4 @@
+services:
+  vwo.settings_service:
+    class: Drupal\vwo\Service\SettingsService
+    arguments: ['@config.factory']
