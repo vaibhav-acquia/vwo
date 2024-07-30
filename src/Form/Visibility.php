@@ -173,7 +173,9 @@ class Visibility extends ConfigFormBase {
       '#options' => $page_options,
       '#default_value' => $config->get('filter.page.type'),
     ];
-
+    $page_type = $config->get('filter.page.type')?:"listexclude";
+    $filter_page_list = $config->get('filter.page.list');
+    $pagelist_default_value = ($page_type == 'listexclude') ? "/admin/\n/admin/*\n/batch\n/node/add/*\n/node/*/*\n/block/*\n/user/*" : '';
     $form['pagefilter']['pagelist'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Pages'),
@@ -182,7 +184,7 @@ class Visibility extends ConfigFormBase {
         '%blog-wildcard' => 'blog/*',
         '%front' => '<front>',
       ]),
-      '#default_value' => $config->get('filter.page.list'),
+      '#default_value' => $filter_page_list ?: $pagelist_default_value,
     ];
 
     // If filter is set to usephp, but this user has no access to edit this,
