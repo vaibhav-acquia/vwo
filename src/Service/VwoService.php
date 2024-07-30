@@ -1,0 +1,277 @@
+<?php
+
+namespace Drupal\vwo\Service;
+
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Markup;
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Class VwoService
+ *
+ * Service to handle VWO related functionalities.
+ */
+class VwoService {
+
+    protected $configFactory;
+
+    public function __construct(ConfigFactoryInterface $configFactory) {
+        $this->configFactory = $configFactory;
+    }
+
+    /**
+     * Provides help text for the VWO module.
+     *
+     * @param string $route_name
+     *   The name of the route.
+     *
+     * @return string
+     *   The help text.
+     */
+    public function getHelpText($route_name) {
+        if ($route_name == 'vwo.settings' || $route_name == 'help.page.vwo') {
+            \Drupal::moduleHandler()->loadInclude('vwo', 'inc', 'vwo.help');
+            return _vwo_help_settings();
+        } elseif ($route_name == 'vwo.settings.visibility') {
+            \Drupal::moduleHandler()->loadInclude('vwo', 'inc', 'vwo.help');
+            return _vwo_help_visibility();
+        } elseif ($route_name == 'vwo.settings.vwoid') {
+            \Drupal::moduleHandler()->loadInclude('vwo', 'inc', 'vwo.help');
+            return _vwo_help_vwoid();
+        }
+        return '';
+    }
+
+    /**
+     * Adds VWO script to page attachments.
+     */
+    public function addPageAttachments(array &$attachments) {
+        $state = &drupal_static('vwo_state', [
+            'add' => FALSE,
+            'added' => FALSE,
+            'custom_url' => FALSE,
+            'cache_contexts' => [],
+        ]);
+
+        // Do not attempt to add more than once.
+        if ($state['added']) {
+            return;
+        }
+
+        $config = $this->configFactory->get('vwo.settings');
+        $id = $config->get('id');
+
+        // If not configured, no point to continue.
+        if ($id == NULL) {
+            return;
+        }
+
+        // Do not proceed if not flagged to add, and filtering not enabled.
+        $filter = ($config->get('filter.enabled') == 'on');
+        if (!$filter && !$state['add']) {
+            return;
+        }
+
+        // Check filter and add appropriate cache contexts.
+        if ($filter) {
+            // Assumption is that we add the code and negate with tests.
+            $state['add'] = TRUE;
+
+            // Need account for user and role checks.
+            $account = \Drupal::currentUser();
+
+            // Per user opt-out.
+            $usercontrol = $config->get('filter.userconfig');
+            if ($usercontrol != 'nocontrol' && $account->isAuthenticated()) {
+                // Start with default.
+                $addjs = ($usercontrol == 'optin') ? FALSE : TRUE;
+
+                // Get user data and set if needed.
+                $userconfig = \Drupal::service('user.data')
+                    ->get('vwo', $account->id(), 'userconfig');
+                if (isset($userconfig)) {
+                    $addjs = $userconfig;
+                }
+
+                // Add the caching context and indicate choice.
+                $state['add'] = $addjs;
+                $state['cache_contexts'][] = 'user';
+            }
+
+            // Node type filtering.
+            if ($state['add'] && $include_node_types = $config->get('filter.nodetypes')) {
+                $node = \Drupal::routeMatch()->getParameter('node');
+
+                if ($node) {
+                    $state['add'] = in_array($node->getType(), $include_node_types);
+                    $state['cache_contexts'][] = 'url.path';
+                } else {
+                    // Condition requires that the page be a node based one.
+                    $state['add'] = FALSE;
+                }
+            }
+
+            // Role filtering.
+            if ($state['add'] && $include_roles = $config->get('filter.roles')) {
+                $intersect = array_intersect($include_roles, $account->getRoles());
+                $state['add'] = ($intersect) ? TRUE : FALSE;
+                $state['cache_contexts'][] = 'user.roles';
+            }
+
+            // Path filtering.
+            if ($state['add'] && $pathlist = $config->get('filter.page.list')) {
+                $filter_type = $config->get('filter.page.type');
+
+                // Eval the PHP code.
+                if ($filter_type == 'usephp') {
+                    // Only actually run if the php module is also here.
+                    if (\Drupal::moduleHandler()->moduleExists('php')) {
+                        if (php_eval($pathlist)) {
+                            $state['add'] = TRUE;
+                        } else {
+                            $state['add'] = FALSE;
+                        }
+                    }
+                } else {
+                    $path_matcher = \Drupal::service('path.matcher');
+                    $current_path = \Drupal::service('path.current')->getPath();
+                    $matched = $path_matcher->matchPath($current_path, $pathlist);
+
+                    // If we haven't matched, also check against the alias.
+                    if (!$matched) {
+                        // Get the alias.
+                        $alias = \Drupal::service('path_alias.manager')->getAliasByPath($current_path);
+
+                        // Only check again if there's a difference.
+                        if ($current_path != $alias) {
+                            $matched = $path_matcher->matchPath($alias, $pathlist);
+                        }
+                    }
+
+                    if ($filter_type == 'listexclude' && $matched) {
+                        $state['add'] = FALSE;
+                    }
+                    if ($filter_type == 'listinclude' && !$matched) {
+                        $state['add'] = FALSE;
+                    }
+                }
+                $state['cache_contexts'][] = 'url.path';
+            }
+        }
+
+        // Add JS if we are going to.
+        if ($state['add']) {
+            // Set cache tags.
+            $attachments['#cache']['tags'] = Cache::mergeTags($attachments['#cache']['tags'] ?? [], $config->getCacheTags());
+
+            $settings = [
+                'id' => $id,
+            ];
+
+            if ($config->get('loading.type') == 'async') {
+                $settings['timeout_library'] = $config->get('loading.timeout.library');
+                $settings['timeout_setting'] = $config->get('loading.timeout.settings');
+                $settings['usejquery'] = ($config->get('loading.usejquery') == 'local') ? 'true' : 'false';
+                $settings['testnull'] = NULL;
+
+                $script = "window._vwo_code || (function () {
+        var account_id={$settings['id']}, 
+        version=2.1,
+        settings_tolerance={$settings['timeout_setting']},
+        hide_element='body',
+        hide_element_style='opacity:0 !important;filter:alpha(opacity=0) !important;background:none !important',
+        /* DO NOT EDIT BELOW THIS LINE */
+        f=false,w=window,d=document,v=d.querySelector('#vwoCode'),cK='_vwo_'+account_id+'_settings',cc={};try{var c=JSON.parse(localStorage.getItem('_vwo_'+account_id+'_config'));cc=c&&typeof c==='object'?c:{}}catch(e){}var stT=cc.stT==='session'?w.sessionStorage:w.localStorage;code={use_existing_jquery:function(){return typeof use_existing_jquery!=='undefined'?use_existing_jquery:undefined},library_tolerance:function(){return typeof library_tolerance!=='undefined'?library_tolerance:undefined},settings_tolerance:function(){return cc.sT||settings_tolerance},hide_element_style:function(){return'{'+(cc.hES||hide_element_style)+'}'},hide_element:function(){if(performance.getEntriesByName('first-contentful-paint')[0]){return''}return typeof cc.hE==='string'?cc.hE:hide_element},getVersion:function(){return version},finish:function(e){if(!f){f=true;var t=d.getElementById('_vis_opt_path_hides');if(t)t.parentNode.removeChild(t);if(e)(new Image).src='https://dev.visualwebsiteoptimizer.com/ee.gif?a='+account_id+e}},finished:function(){return f},addScript:function(e){var t=d.createElement('script');t.type='text/javascript';if(e.src){t.src=e.src}else{t.text=e.text}d.getElementsByTagName('head')[0].appendChild(t)},load:function(e,t){var i=this.getSettings(),n=d.createElement('script'),r=this;t=t||{};if(i){n.textContent=i;d.getElementsByTagName('head')[0].appendChild(n);if(!w.VWO||VWO.caE){stT.removeItem(cK);r.load(e)}}else{var o=new XMLHttpRequest;o.open('GET',e,true);o.withCredentials=!t.dSC;o.responseType=t.responseType||'text';o.onload=function(){if(t.onloadCb){return t.onloadCb(o,e)}if(o.status===200){_vwo_code.addScript({text:o.responseText})}else{_vwo_code.finish('&e=loading_failure:'+e)}};o.onerror=function(){if(t.onerrorCb){return t.onerrorCb(e)}_vwo_code.finish('&e=loading_failure:'+e)};o.send()}},getSettings:function(){try{var e=stT.getItem(cK);if(!e){return}e=JSON.parse(e);if(Date.now()>e.e){stT.removeItem(cK);return}return e.s}catch(e){return}},init:function(){if(d.URL.indexOf('__vwo_disable__')>-1)return;var e=this.settings_tolerance();w._vwo_settings_timer=setTimeout(function(){_vwo_code.finish();stT.removeItem(cK)},e);var t;if(this.hide_element()!=='body'){t=d.createElement('style');var i=this.hide_element(),n=i?i+this.hide_element_style():'',r=d.getElementsByTagName('head')[0];t.setAttribute('id','_vis_opt_path_hides');v&&t.setAttribute('nonce',v.nonce);t.setAttribute('type','text/css');if(t.styleSheet)t.styleSheet.cssText=n;else t.appendChild(d.createTextNode(n));r.appendChild(t)}else{t=d.getElementsByTagName('head')[0];var n=d.createElement('div');n.style.cssText='z-index: 2147483647 !important;position: fixed !important;left: 0 !important;top: 0 !important;width: 100% !important;height: 100% !important;background: white !important;';n.setAttribute('id','_vis_opt_path_hides');n.classList.add('_vis_hide_layer');t.parentNode.insertBefore(n,t.nextSibling)}var o='https://dev.visualwebsiteoptimizer.com/j.php?a='+account_id+'&u='+encodeURIComponent(d.URL)+'&vn='+version;if(w.location.search.indexOf('_vwo_xhr')!==-1){this.addScript({src:o})}else{this.load(o+'&x=true')}}};w._vwo_code=code;code.init();})()";
+
+                $attachments['#attached']['drupalSettings']['vwo'] = $settings;
+                $attachments['#attached']['html_head'][] = [
+                    [
+                        '#tag' => 'script',
+                        '#attributes' => [
+                            "data-cfasync" => "false",
+                            "type" => "text/javascript",
+                            "id" => "vwoCode",
+                        ],
+                        '#value' => Markup::create($script),
+                    ], 'vwo',
+                ];
+            } else {
+                // Synchronous adding of code is not implemented. Do not alter cache contexts.
+                $src = "https://dev.visualwebsiteoptimizer.com/lib/{$settings['id']}.js";
+                $attachments['#attached']['drupalSettings']['vwo'] = $settings;
+                $attachments['#attached']['html_head'][] = [
+                    [
+                        '#tag' => 'script',
+                        '#attributes' => [
+                            "data-cfasync" => "false",
+                            "type" => "text/javascript",
+                            "id" => "vwoCode",
+                            "src" => $src,
+                        ],
+                        '#value' => '',
+                    ], 'vwo',
+                ];
+                return;
+            }
+        }
+
+        // Add the cache contexts if set.
+        if ($state['cache_contexts']) {
+            if (isset($attachments['#cache']['contexts'])) {
+                $attachments['#cache']['contexts'] = array_merge(
+                    $attachments['#cache']['contexts'],
+                    $state['cache_contexts']
+                );
+            } else {
+                $attachments['#cache']['contexts'] = $state['cache_contexts'];
+            }
+        }
+    }
+
+    /**
+     * Alters the user form to include VWO opt-in/opt-out option.
+     */
+    public function alterUserForm(&$form, FormStateInterface $form_state, $form_id) {
+        if ($form_id == 'user_form') {
+            $config = $this->configFactory->get('vwo.settings');
+            $userfilter = $config->get('filter.userconfig');
+
+            if ($userfilter == 'nocontrol' || $config->get('id') == NULL) {
+                return;
+            }
+
+            $vwo_checkbox = ($userfilter == 'optin') ? 0 : 1;
+
+            $account = $form_state->getFormObject()->getEntity();
+            $userconfig = \Drupal::service('user.data')->get('vwo', $account->id(), 'userconfig');
+            if (isset($userconfig)) {
+                $vwo_checkbox = $userconfig;
+            }
+
+            $form['vwo_user'] = [
+                '#type' => 'details',
+                '#open' => TRUE,
+                '#title' => t('VWO'),
+            ];
+
+            $form['vwo_user']['vwo_userfilter'] = [
+                '#type' => 'checkbox',
+                '#title' => t('Include VWO A/B testing'),
+                '#description' => t('This website may run A/B testing at times. If this box is checked, the javascript required for it to work will be included.'),
+                '#default_value' => $vwo_checkbox,
+            ];
+
+            $form['actions']['submit']['#submit'][] = '::submitUserForm';
+        }
+    }
+
+    /**
+     * Submit handler to save user choice on VWO code opt-in/out.
+     */
+    public function submitUserForm($form, FormStateInterface $form_state) {
+        $account = $form_state->getFormObject()->getEntity();
+        \Drupal::service('user.data')->set('vwo', $account->id(), 'userconfig', $form_state->getValue('vwo_userfilter'));
+    }
+}

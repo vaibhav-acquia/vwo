@@ -2,3 +2,7 @@ services:
   vwo.settings_service:
     class: Drupal\vwo\Service\SettingsService
     arguments: ['@config.factory']
+
+  vwo.service:
+    class: Drupal\vwo\Service\VwoService
+    arguments: ['@config.factory']
