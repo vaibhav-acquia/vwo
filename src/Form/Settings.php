@@ -190,7 +190,7 @@ class Settings extends ConfigFormBase {
       $form_state->setValue('id', NULL);
     }
   }
-  
+
   /**
    * {@inheritdoc}
    */
@@ -206,7 +206,8 @@ class Settings extends ConfigFormBase {
     foreach ($field_key_config_map as $field_key => $config_key) {
       $values[$config_key]= $form_state->getValue($field_key);
     }
-
+    
+    $this->messenger()->addMessage($this->t('VWO settings have been saved.'));
     $this->settingsService->setSettings($values);
   }
 
