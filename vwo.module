@@ -7,33 +7,33 @@ use Drupal\Core\Routing\RouteMatchInterface;
  * Implements hook_page_attachments().
  */
 function vwo_page_attachments(array &$attachments) {
-    \Drupal::service('vwo.service')->addPageAttachments($attachments);
+  \Drupal::service('vwo.service')->addPageAttachments($attachments);
 }
 
 /**
  * Implements hook_form_FORM_ID_alter().
  */
 function vwo_form_user_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-    \Drupal::service('vwo.service')->alterUserForm($form, $form_state, $form_id);
+  \Drupal::service('vwo.service')->alterUserForm($form, $form_state, $form_id);
 }
 
 /**
  * Implements hook_help().
  */
 function vwo_help($route_name, RouteMatchInterface $route_match) {
-    return \Drupal::service('vwo.service')->getHelpText($route_name);
+  return \Drupal::service('vwo.service')->getHelpText($route_name);
 }
 
 /**
  * Custom function to include VWO script.
  */
 function vwo_include_script() {
-    return \Drupal::service('vwo.service')->includeScript();
+  return \Drupal::service('vwo.service')->includeScript();
 }
 
 /**
  * Submit handler to save user choice on VWO code opt-in/out.
  */
 function _vwo_form_user_form_alter_submit($form, FormStateInterface $form_state) {
-    \Drupal::service('vwo.service')->submitUserForm($form, $form_state);
+  \Drupal::service('vwo.service')->submitUserForm($form, $form_state);
 }
