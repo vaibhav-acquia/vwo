@@ -169,7 +169,6 @@ class Settings extends ConfigFormBase {
     return $form;
   }
 
-
   /**
    * {@inheritdoc}
    */
@@ -191,8 +190,7 @@ class Settings extends ConfigFormBase {
       $form_state->setValue('id', NULL);
     }
   }
-
-
+  
   /**
    * {@inheritdoc}
    */
