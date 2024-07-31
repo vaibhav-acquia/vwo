@@ -5,11 +5,34 @@ namespace Drupal\vwo\Form;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Drupal\vwo\Service\SettingsService;
 
 /**
  * VWO Settings form.
  */
 class Settings extends ConfigFormBase {
+
+  protected $settingsService;
+
+  /**
+   * Constructs a new Settings form object.
+   *
+   * @param \Drupal\vwo\Service\SettingsService $settings_service
+   *   The settings service.
+   */
+  public function __construct(SettingsService $settings_service) {
+    $this->settingsService = $settings_service;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('vwo.settings_service')
+    );
+  }
 
   /**
    * {@inheritdoc}
@@ -31,10 +54,7 @@ class Settings extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
-
-    $config = $this->config('vwo.settings');
-
-    $id = $config->get('id');
+    $settings = $this->settingsService->getSettings();
     $form['id_fieldset'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Account'),
@@ -53,7 +73,7 @@ class Settings extends ConfigFormBase {
       '#size' => 15,
       '#maxlength' => 20,
       '#required' => TRUE,
-      '#default_value' => ($id == NULL) ? 'NONE' : $id,
+      '#default_value' => ($settings['id'] == NULL) ? 'NONE' : $settings['id'],
     ];
 
     $form['synchtype_fieldset'] = [
@@ -76,12 +96,11 @@ class Settings extends ConfigFormBase {
         $this->t('See changelog for more details.'),
         '</p>',
       ]),
+      '#default_value' => $settings['loading.type'],
       '#options' => [
         'async' => $this->t('Asynchronous (default)'),
         'sync' => $this->t('Synchronous'),
       ],
-      '#required' => TRUE,
-      '#default_value' => $config->get('loading.type'),
     ];
 
     $form['advanced'] = [
@@ -112,7 +131,7 @@ class Settings extends ConfigFormBase {
       '#min' => 0,
       '#max' => 9999,
       '#required' => TRUE,
-      '#default_value' => $config->get('loading.timeout.library'),
+      '#default_value' => $settings['loading.timeout.library'],
     ];
 
     $form['advanced']['asynctolsettings'] = [
@@ -123,7 +142,7 @@ class Settings extends ConfigFormBase {
       '#min' => 0,
       '#max' => 9999,
       '#required' => TRUE,
-      '#default_value' => $config->get('loading.timeout.settings'),
+      '#default_value' => $settings['loading.timeout.settings'],
     ];
 
     $form['advanced']['asyncusejquery'] = [
@@ -135,12 +154,11 @@ class Settings extends ConfigFormBase {
         'import' => $this->t('False (default)'),
       ],
       '#required' => TRUE,
-      '#default_value' => $config->get('loading.usejquery'),
+      '#default_value' => $settings['loading.usejquery'],
     ];
-
+    
     $form['actions'] = [
       '#type' => 'actions',
-
       'submit' => [
         '#type' => 'submit',
         '#value' => $this->t('Save configuration'),
@@ -177,11 +195,6 @@ class Settings extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-
-    // Grab the editable configuration.
-    $config = $this->config('vwo.settings');
-
-    // Set each of the configuration values.
     $field_key_config_map = [
       'id' => 'id',
       'synchtype' => 'loading.type',
@@ -189,14 +202,13 @@ class Settings extends ConfigFormBase {
       'asynctolsettings' => 'loading.timeout.settings',
       'asyncusejquery' => 'loading.usejquery',
     ];
+    $values = [];
     foreach ($field_key_config_map as $field_key => $config_key) {
-      $config->set($config_key, $form_state->getValue($field_key));
+      $values[$config_key]= $form_state->getValue($field_key);
     }
-
-    // Commit saved configuration.
-    $config->save();
-
+    
     $this->messenger()->addMessage($this->t('VWO settings have been saved.'));
+    $this->settingsService->setSettings($values);
   }
 
 }
