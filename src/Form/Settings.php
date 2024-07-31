@@ -156,9 +156,43 @@ class Settings extends ConfigFormBase {
       '#required' => TRUE,
       '#default_value' => $settings['loading.usejquery'],
     ];
+    
+    $form['actions'] = [
+      '#type' => 'actions',
+      'submit' => [
+        '#type' => 'submit',
+        '#value' => $this->t('Save configuration'),
+        '#button_type' => 'primary',
+      ],
+    ];
 
+    return $form;
+  }
+
+
+  /**
+   * {@inheritdoc}
+   */
+  public function validateForm(array &$form, FormStateInterface $form_state) {
+
+    // VWO ID Was not set to "number" field to allow for setting it to "NONE",
+    // and so much be manually validated.
+    $vwoid = $form_state->getValue('id');
+    if (!preg_match('/^\d+$/', $vwoid) && $vwoid != 'NONE') {
+      $form_state->setErrorByName('id',
+        $this->t('Your VWO ID must be numeric (or set to "NONE" to disable). If you have having issues locating it, please use the <a href=":parse_url">Extract Account Id tool</a>.', [
+          ':parse_url' => Url::fromRoute('vwo.settings.vwoid')->toString(),
+        ])
+      );
+    }
+
+    // Translate that NONE into NULL for Config API.
+    if ($vwoid == 'NONE') {
+      $form_state->setValue('id', NULL);
+    }
     return parent::buildForm($form, $form_state);
   }
+
 
   /**
    * {@inheritdoc}
