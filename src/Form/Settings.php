@@ -190,7 +190,6 @@ class Settings extends ConfigFormBase {
     if ($vwoid == 'NONE') {
       $form_state->setValue('id', NULL);
     }
-    return parent::buildForm($form, $form_state);
   }
 
 
