@@ -136,16 +136,12 @@ class Visibility extends ConfigFormBase {
       $node_options[$key] = $value->label();
     }
 
-    // Convert the configuration value into a default_value.
-    $nodes_config = $config->get('filter.nodetypes');
-    $nodes_default_value = array_combine($nodes_config, $nodes_config);
-
     $form['nodefilter']['nodechecks'] = [
       '#type' => 'checkboxes',
       '#title' => $this->t('Include on Content Types'),
       '#description' => $this->t('Include VWO javascript if the full page display is of this Content Type.'),
       '#options' => $node_options,
-      '#default_value' => $nodes_default_value,
+      '#default_value' => $config->get('filter.nodetypes') ?? [],
     ];
 
     // Page specific options.
@@ -227,16 +223,12 @@ class Visibility extends ConfigFormBase {
     // Build the user_roles options array.
     $role_options = array_map(['\Drupal\Component\Utility\Html', 'escape'], user_role_names());
 
-    // Convert the configuration value into a default_value.
-    $roles_config = $config->get('filter.roles');
-    $roles_default_value = array_combine($roles_config, $roles_config);
-
     $form['rolefitler']['rolechecks'] = [
       '#type' => 'checkboxes',
       '#title' => $this->t('Roles'),
       '#description' => $this->t('Include VWO javascript if user has any of the selected role(s). If you select no roles, it will be included for all users.'),
       '#options' => $role_options,
-      '#default_value' => $roles_default_value,
+      '#default_value' => $config->get('filter.roles') ?? [],
     ];
 
     $form['actions'] = [
