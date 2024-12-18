@@ -73,6 +73,7 @@ function vwo_page_attachments(array &$attachments) {
       $node = \Drupal::routeMatch()->getParameter('node');
 
       if ($node) {
+        $node = !is_object($node)? \Drupal::entityTypeManager()->getStorage("node")->load($node) : $node;
         $state['add'] = in_array($node->getType(), $include_node_types);
         $state['cache_contexts'][] = 'url.path';
       }
