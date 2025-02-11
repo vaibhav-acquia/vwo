@@ -7,6 +7,8 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Drupal\user\Entity\Role;
+use Drupal\Component\Utility\Html;
 
 /**
  * Visibility Form.
@@ -224,8 +226,14 @@ class Visibility extends ConfigFormBase {
       ],
     ];
 
-    // Build the user_roles options array.
-    $role_options = array_map(['\Drupal\Component\Utility\Html', 'escape'], user_role_names());
+   // Load all roles.
+    $roles = Role::loadMultiple();
+    
+    // Map over the roles to get their labels.
+    $role_options = [];
+    foreach ($roles as $role) {
+      $role_options[$role->id()] = Html::escape($role->label());
+    }
 
     // Convert the configuration value into a default_value.
     $roles_config = $config->get('filter.roles');
