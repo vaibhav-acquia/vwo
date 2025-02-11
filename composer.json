@@ -2,10 +2,5 @@
   "name": "drupal/vwo",
   "type": "drupal-module",
   "keywords": ["Drupal"],
-  "homepage": "https://www.drupal.org/project/vwo",
-  "minimum-stability": "dev",
-  "support": {
-    "issues": "http://drupal.org/project/issues/vwo"
-  },
   "require": { }
 }
